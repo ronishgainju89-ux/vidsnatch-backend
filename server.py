@@ -158,4 +158,5 @@ if _name_ == "_main_":
     print("═" * 50)
     print("  VidSnatch Backend running at http://localhost:5000")
     print("═" * 50)
-    app.run(port=5000, debug=True)
+   import os
+app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
