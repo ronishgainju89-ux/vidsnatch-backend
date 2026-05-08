@@ -1,30 +1,24 @@
 """
 VidSnatch Backend — server.py
-────────────────────────────────────────────────────
-Run:  python server.py
-Deps: pip install flask flask-cors yt-dlp
-Also: install ffmpeg (brew install ffmpeg / apt install ffmpeg)
 """
 
+import os
+import re
+import tempfile
 from flask import Flask, request, send_file, jsonify, after_this_request
 from flask_cors import CORS
 import yt_dlp
-import tempfile
-import os
-import re
 
 app = Flask(_name_)
-CORS(app)  # allow requests from your frontend
+CORS(app)
 
-# ── Optional: simple API key for premium users ──────────────
-PREMIUM_KEY = "your-secret-premium-key"  # set a real key, pass from frontend header
+PREMIUM_KEY = "your-secret-premium-key"
 
 def is_premium(req):
     return req.headers.get("X-Premium-Key") == PREMIUM_KEY
 
 
-def get_format(quality: str, premium: bool) -> dict:
-    """Return yt-dlp options for a given quality string."""
+def get_format(quality: str, premium: bool):
     postprocessors = []
 
     if quality == "audio":
@@ -32,13 +26,11 @@ def get_format(quality: str, premium: bool) -> dict:
         postprocessors = [{
             "key": "FFmpegExtractAudio",
             "preferredcodec": "mp3",
-            "preferredquality": "320" if premium else "192",
+            "preferredquality": "192",
         }]
-    elif quality == "best":
-        fmt = "bestvideo+bestaudio/best"
     elif quality in ("4k", "2160p"):
         if not premium:
-            return None  # locked
+            return None
         fmt = "bestvideo[height<=2160]+bestaudio/best"
     elif quality == "8k":
         if not premium:
@@ -58,7 +50,6 @@ def get_format(quality: str, premium: bool) -> dict:
 
 @app.route("/api/download", methods=["POST", "GET"])
 def download():
-    # Support both POST JSON and GET query params
     if request.method == "POST":
         data = request.get_json(silent=True) or {}
         url = data.get("url", "").strip()
@@ -70,7 +61,6 @@ def download():
     if not url:
         return jsonify({"error": "No URL provided"}), 400
 
-    # Basic URL sanity check
     if not re.match(r"https?://", url):
         return jsonify({"error": "Invalid URL"}), 400
 
@@ -87,7 +77,7 @@ def download():
         "format": fmt_opts["format"],
         "postprocessors": fmt_opts.get("postprocessors", []),
         "merge_output_format": "mp4",
-        "noplaylist": True,          # single video only
+        "noplaylist": True,
         "quiet": True,
         "no_warnings": True,
         "socket_timeout": 30,
@@ -104,7 +94,6 @@ def download():
         filepath = os.path.join(tmp_dir, files[0])
         filename = files[0]
 
-        # Cleanup after sending
         @after_this_request
         def cleanup(response):
             try:
@@ -114,11 +103,7 @@ def download():
                 pass
             return response
 
-        return send_file(
-            filepath,
-            as_attachment=True,
-            download_name=filename,
-        )
+        return send_file(filepath, as_attachment=True, download_name=filename)
 
     except yt_dlp.utils.DownloadError as e:
         return jsonify({"error": f"Download error: {str(e)[:200]}"}), 400
@@ -128,13 +113,10 @@ def download():
 
 @app.route("/api/info", methods=["POST"])
 def video_info():
-    """Return metadata (title, thumbnail, duration) without downloading."""
     data = request.get_json(silent=True) or {}
     url = data.get("url", "").strip()
-
     if not url:
         return jsonify({"error": "No URL"}), 400
-
     try:
         with yt_dlp.YoutubeDL({"quiet": True, "skip_download": True}) as ydl:
             info = ydl.extract_info(url, download=False)
@@ -155,8 +137,5 @@ def health():
 
 
 if _name_ == "_main_":
-    print("═" * 50)
-    print("  VidSnatch Backend running at http://localhost:5000")
-    print("═" * 50)
-   import os
-app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
